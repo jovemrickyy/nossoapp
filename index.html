@@ -1,0 +1,83 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nós Dois</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#e91e63">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#fff0f5;height:100vh;display:flex;flex-direction:column}
+header{background:#e91e63;color:#fff;padding:8px;text-align:center;font-size:14px}
+main{flex:1;overflow:auto;padding:12px}section{display:none}section.on{display:block}
+nav{display:flex;background:#fff;border-top:1px solid #ddd}nav button{flex:1;border:0;background:none;font-size:22px;padding:8px}nav button.on{background:#fce4ec}
+.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 4px #0002}
+button.b{background:#e91e63;color:#fff;border:0;border-radius:20px;padding:8px 16px;margin:2px}
+textarea,input[type=text],input[type=date]{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px}
+#msgs{height:55vh;overflow:auto;display:flex;flex-direction:column}
+.m{max-width:75%;padding:6px 10px;border-radius:10px;margin:3px;background:#fff}.m.me{align-self:flex-end;background:#dcf8c6}.m b{font-size:11px;display:block;color:#e91e63}
+#grid img{width:100%;border-radius:8px;margin-bottom:6px}#map{height:60vh;border-radius:12px}
+.big{font-size:60px;text-align:center}.bar{height:14px;background:#eee;border-radius:7px}.bar i{display:block;height:100%;background:#e91e63;border-radius:7px}
+</style></head><body>
+<header><b id="clk"></b></header>
+<main>
+<section id="s0" class="on">
+ <div class="card" style="text-align:center">❤️ Juntos há<div class="big" id="days">0</div>dias<br><small>Início: <input type="date" id="since" style="width:auto"></small></div>
+ <div class="card"><b>📝 Bilhete</b><textarea id="note" rows="3" placeholder="Deixe um bilhete..."></textarea><small id="noteby"></small></div>
+ <div class="card"><b>Como você está?</b><br><span id="moods"></span><div id="moodsAll"></div></div>
+</section>
+<section id="s1"><div id="msgs" class="card"></div><div style="display:flex;gap:4px"><input type="text" id="mi" placeholder="Mensagem"><button class="b" id="ms">➤</button></div></section>
+<section id="s2"><label class="b" style="display:inline-block">📷 Enviar foto<input type="file" accept="image/*" id="pf" hidden></label><div id="grid"></div></section>
+<section id="s3"><p>Toque no mapa para marcar o date 💑</p><div id="map"></div></section>
+<section id="s4"><div class="card"><b id="q">Toque para começar</b></div><button class="b" id="nq">🎲 Nova pergunta</button>
+ <textarea id="ans" rows="2" placeholder="Sua resposta"></textarea><button class="b" id="sa">Responder</button><div id="answers"></div></section>
+<section id="s5"><div class="card"><div class="big" id="pe">🐱</div><h3 id="pn" style="text-align:center"></h3><div class="bar"><i id="pb"></i></div><p id="pi" style="text-align:center"></p>
+ <center><button class="b" id="feed">🍖 Dar comida</button><button class="b" id="ren">✏️ Nome</button></center></div></section>
+</main>
+<nav id="nav"></nav>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ===== COLE AQUI A CONFIG DO SEU FIREBASE =====
+firebase.initializeApp({apiKey:"COLE_AQUI",databaseURL:"https://SEU-PROJETO-default-rtdb.firebaseio.com",projectId:"SEU-PROJETO"});
+const db=firebase.database().ref('casal'),$=i=>document.getElementById(i);
+let me=localStorage.me;if(!me){me=prompt('Qual é o seu nome?')||'Eu';localStorage.me=me}
+// Abas
+const tabs=['🏠','💬','📷','🗺️','❓','🐱'];
+tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{document.querySelectorAll('section').forEach((s,j)=>s.classList.toggle('on',i==j));[...$('nav').children].forEach((x,j)=>x.classList.toggle('on',i==j));if(i==3)setTimeout(()=>map.invalidateSize(),50)};$('nav').append(b)});$('nav').children[0].classList.add('on');
+// Relógio
+setInterval(()=>{$('clk').textContent=new Date().toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})},1000);
+// Início
+let since=null;
+db.child('since').on('value',s=>{since=s.val();if(since)$('since').value=since;calc()});
+$('since').onchange=e=>db.child('since').set(e.target.value);
+function calc(){$('days').textContent=since?Math.floor((Date.now()-new Date(since+'T00:00'))/864e5):0}setInterval(calc,60000);
+db.child('note').on('value',s=>{const v=s.val();if(v&&document.activeElement!=$('note'))$('note').value=v.t;$('noteby').textContent=v?'por '+v.n:''});
+$('note').onchange=e=>db.child('note').set({t:e.target.value,n:me});
+['😍','😊','😴','😢','😡','🤒','🥰'].forEach(e=>{const b=document.createElement('button');b.className='b';b.textContent=e;b.onclick=()=>db.child('mood/'+me).set(e);$('moods').append(b)});
+db.child('mood').on('value',s=>{$('moodsAll').innerHTML=Object.entries(s.val()||{}).map(([n,e])=>`<p>${e} <b>${n}</b></p>`).join('')});
+// Chat
+const send=()=>{const t=$('mi').value.trim();if(t){db.child('chat').push({n:me,t,ts:Date.now()});$('mi').value=''}};
+$('ms').onclick=send;$('mi').onkeydown=e=>e.key=='Enter'&&send();
+db.child('chat').limitToLast(200).on('child_added',s=>{const m=s.val(),d=document.createElement('div');d.className='m'+(m.n==me?' me':'');
+ const b=document.createElement('b');b.textContent=m.n;const p=document.createElement('span');p.textContent=m.t;
+ const h=document.createElement('small');h.textContent=' '+new Date(m.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});d.append(b,p,h);$('msgs').append(d);$('msgs').scrollTop=1e9});
+// Fotos (reduzidas e salvas no banco)
+$('pf').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const k=Math.min(1,800/im.width),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);db.child('photos').push({n:me,img:c.toDataURL('image/jpeg',.6),ts:Date.now()})};im.src=URL.createObjectURL(f)};
+db.child('photos').on('child_added',s=>{const p=s.val(),d=document.createElement('div'),i=new Image();i.src=p.img;const c=document.createElement('small');c.textContent='📷 '+p.n+' • '+new Date(p.ts).toLocaleDateString('pt-BR');d.append(i,c);$('grid').prepend(d)});
+// Mapa
+const map=L.map('map').setView([-30.03,-51.22],12);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+map.on('click',e=>{const t=prompt('Nome do date? (ex: Jantar, 25/12)');if(t)db.child('dates').push({lat:e.latlng.lat,lng:e.latlng.lng,t,n:me})});
+db.child('dates').on('child_added',s=>{const d=s.val();L.marker([d.lat,d.lng]).addTo(map).bindPopup('💑 '+d.t.replace(/</g,'&lt;')+'<br>marcado por '+d.n.replace(/</g,'&lt;'))});
+// Perguntas
+const Q=['Qual foi o seu primeiro pensamento quando me viu?','Qual é o seu maior sonho?','Qual lugar do mundo você quer conhecer comigo?','Qual é a sua lembrança favorita nossa?','O que te deixa com medo?','Qual é o seu filme favorito e por quê?','Como seria o nosso dia perfeito?','O que você mais admira em mim?','Qual é a sua maior mania?','Onde você se vê daqui a 5 anos?','Qual música lembra a gente?','O que eu faço que te faz sorrir?'];
+let qi=null;
+db.child('q').on('value',s=>{qi=s.val();$('q').textContent=qi==null?'Toque para começar':Q[qi]});
+$('nq').onclick=()=>db.child('q').set(Math.floor(Math.random()*Q.length));
+$('sa').onclick=()=>{if(qi!=null&&$('ans').value){db.child('a/'+qi+'/'+me).set($('ans').value);$('ans').value=''}};
+db.child('a').on('value',s=>{const a=(s.val()||{})[qi]||{};$('answers').innerHTML='';Object.entries(a).forEach(([n,t])=>{const d=document.createElement('div');d.className='card';d.textContent=n+': '+t;$('answers').append(d)})});
+// Mascote
+let pet={nome:'Mascote',fome:80,last:Date.now(),n:0};
+const fome=()=>Math.max(0,pet.fome-(Date.now()-pet.last)/36e5*12.5);
+function draw(){const f=fome();$('pe').textContent=f>60?'😻':f>30?'🐱':f>0?'😿':'💀';$('pn').textContent=pet.nome;$('pb').style.width=f+'%';$('pi').textContent='Fome: '+Math.round(f)+'% • Refeições: '+pet.n}
+db.child('pet').on('value',s=>{if(s.val())pet=s.val();draw()});setInterval(draw,30000);
+$('feed').onclick=()=>db.child('pet').set({...pet,fome:Math.min(100,fome()+25),last:Date.now(),n:(pet.n||0)+1});
+$('ren').onclick=()=>{const n=prompt('Nome do mascote:',pet.nome);if(n)db.child('pet').set({...pet,nome:n})};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
